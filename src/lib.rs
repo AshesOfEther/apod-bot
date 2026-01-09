@@ -64,12 +64,12 @@ struct VideoMessage {
 pub fn run() {
 	let _ = dotenvy::dotenv(); // We are fine with the file not existing.
 
-	let nasa_api_key = env::var("NASA_API_KEY").unwrap();
+	let apod_api_url = env::var("APOD_API_URL").unwrap();
 	let webhook_url = env::var("WEBHOOK_URL").unwrap();
 
 	let date_arg = env::args().nth(1);
 
-	let data = fetch_apod(date_arg.as_deref(), &nasa_api_key).unwrap();
+	let data = fetch_apod(date_arg.as_deref(), &apod_api_url).unwrap();
 
 	// For debugging, in case the resulting message looks wrong.
 	println!("{data:#?}");
@@ -87,11 +87,10 @@ pub fn run() {
 	}
 }
 
-fn fetch_apod(date: Option<&str>, api_key: &str) -> Result<Apod, reqwest::Error> {
+fn fetch_apod(date: Option<&str>, apod_api_url: &str) -> Result<Apod, reqwest::Error> {
 	let http_client = reqwest::blocking::Client::new();
 	let mut builder = http_client
-		.get("https://api.nasa.gov/planetary/apod")
-		.query(&[("api_key", api_key)]);
+		.get(apod_api_url);
 
 	if let Some(date) = date {
 		builder = builder.query(&[("date", date)]);
