@@ -33,6 +33,8 @@ enum Message {
 
 #[derive(Serialize)]
 struct ImageMessage {
+	content: String,
+	allowed_mentions: AllowedMentions,
 	embeds: [Embed; 1],
 }
 
@@ -59,6 +61,12 @@ struct EmbedImage {
 #[derive(Serialize)]
 struct VideoMessage {
 	content: String,
+	allowed_mentions: AllowedMentions,
+}
+
+#[derive(Serialize)]
+struct AllowedMentions {
+	roles: [String; 1],
 }
 
 pub fn run() {
@@ -66,6 +74,7 @@ pub fn run() {
 
 	let apod_api_url = env::var("APOD_API_URL").unwrap();
 	let webhook_url = env::var("WEBHOOK_URL").unwrap();
+	let role_id = env::var("ROLE_ID").unwrap();
 
 	let date_arg = env::args().nth(1);
 
@@ -74,7 +83,7 @@ pub fn run() {
 	// For debugging, in case the resulting message looks wrong.
 	println!("{data:#?}");
 
-	let message = create_message(data);
+	let message = create_message(data, &role_id);
 
 	let response = reqwest::blocking::Client::new()
 		.post(webhook_url)
@@ -89,8 +98,7 @@ pub fn run() {
 
 fn fetch_apod(date: Option<&str>, apod_api_url: &str) -> Result<Apod, reqwest::Error> {
 	let http_client = reqwest::blocking::Client::new();
-	let mut builder = http_client
-		.get(apod_api_url);
+	let mut builder = http_client.get(apod_api_url);
 
 	if let Some(date) = date {
 		builder = builder.query(&[("date", date)]);
@@ -102,7 +110,7 @@ fn fetch_apod(date: Option<&str>, apod_api_url: &str) -> Result<Apod, reqwest::E
 		.json::<Apod>()
 }
 
-fn create_message(data: Apod) -> Message {
+fn create_message(data: Apod, role_id: &str) -> Message {
 	let url_date = &data.date.replace('-', "")[2..];
 	let url = format!("https://apod.nasa.gov/apod/ap{url_date}.html");
 
@@ -111,8 +119,13 @@ fn create_message(data: Apod) -> Message {
 		.format("%B %d, %Y")
 		.to_string();
 
+	let allowed_mentions = AllowedMentions {
+		roles: [role_id.to_string()],
+	};
+
 	match data.media_type {
 		MediaType::Image => Message::Image(ImageMessage {
+			content: format!("<@&{role_id}>"),
 			embeds: [Embed {
 				title: data.title,
 				description: data.explanation,
@@ -121,6 +134,7 @@ fn create_message(data: Apod) -> Message {
 				color: 0x063785,
 				image: EmbedImage { url: data.url },
 			}],
+			allowed_mentions,
 		}),
 		MediaType::Video => {
 			let embed_url = reqwest::Url::parse(&data.url).unwrap();
@@ -128,10 +142,11 @@ fn create_message(data: Apod) -> Message {
 			let video_url = format!("https://youtube.com/watch?v={video_id}");
 			Message::Video(VideoMessage {
 				content: format!(
-					"**{title} ({date_string}):** {explanation} (<{url}>)\n\n{video_url}",
+					"<@&{role_id}> **{title} ({date_string}):** {explanation} (<{url}>)\n\n{video_url}",
 					title = data.title,
 					explanation = data.explanation
 				),
+				allowed_mentions,
 			})
 		}
 	}
